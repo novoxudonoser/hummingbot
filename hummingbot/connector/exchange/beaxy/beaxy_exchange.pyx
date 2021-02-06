@@ -326,7 +326,6 @@ cdef class BeaxyExchange(ExchangeBase):
             execute_price = Decimal(order_update['average_price'])
 
             order_type_description = tracked_order.order_type_description
-            order_type = OrderType.MARKET if tracked_order.order_type == OrderType.MARKET else OrderType.LIMIT
             # Emit event if executed amount is greater than 0.
             if execute_amount_diff > s_decimal_0:
                 order_filled_event = OrderFilledEvent(
@@ -334,13 +333,13 @@ cdef class BeaxyExchange(ExchangeBase):
                     tracked_order.client_order_id,
                     tracked_order.trading_pair,
                     tracked_order.trade_type,
-                    order_type,
+                    tracked_order.order_type,
                     execute_price,
                     execute_amount_diff,
                     self.c_get_fee(
                         tracked_order.base_asset,
                         tracked_order.quote_asset,
-                        order_type,
+                        tracked_order.order_type,
                         tracked_order.trade_type,
                         execute_price,
                         execute_amount_diff,
@@ -370,7 +369,7 @@ cdef class BeaxyExchange(ExchangeBase):
                                                                     tracked_order.executed_amount_base,
                                                                     tracked_order.executed_amount_quote,
                                                                     tracked_order.fee_paid,
-                                                                    order_type))
+                                                                    tracked_order.order_type))
                     else:
                         self.logger().info(f'The market sell order {tracked_order.client_order_id} has completed '
                                            f'according to order status API.')
@@ -384,7 +383,7 @@ cdef class BeaxyExchange(ExchangeBase):
                                                                      tracked_order.executed_amount_base,
                                                                      tracked_order.executed_amount_quote,
                                                                      tracked_order.fee_paid,
-                                                                     order_type))
+                                                                     tracked_order.order_type))
                 else:
                     self.logger().info(f'The market order {tracked_order.client_order_id} has failed/been cancelled '
                                        f'according to order status API.')
@@ -404,18 +403,20 @@ cdef class BeaxyExchange(ExchangeBase):
         """
         path_url = BeaxyConstants.TradingApi.ORDERS_ENDPOINT
         trading_pair = trading_pair_to_symbol(trading_pair)  # at Beaxy all pairs listed without splitter
+        is_limit_type = order_type.is_limit_type()
+
+
         data = {
-            # Putting client order id in text because API requires client order id to be a valid UUID
             'text': order_id,
             'security_id': trading_pair,
-            'type': 'limit' if order_type is OrderType.LIMIT else 'market',
+            'type': 'limit' if is_limit_type else 'market',
             'side': 'buy' if is_buy else 'sell',
             'quantity': f'{amount:f}',
             # https://beaxyapiv2trading.docs.apiary.io/#/data-structures/0/time-in-force?mc=reference%2Frest%2Forder%2Fcreate-order%2F200
-            'time_in_force': 'gtc' if order_type is OrderType.LIMIT else 'ioc',
+            'time_in_force': 'gtc' if is_limit_type else 'ioc',
             'destination': 'MAXI',
         }
-        if order_type is OrderType.LIMIT:
+        if is_limit_type:
             data['price'] = f'{price:f}'
         order_result = await self._api_request('POST', path_url=path_url, data=data)
         self.logger().debug(f'Set order result {order_result}')
@@ -446,7 +447,7 @@ cdef class BeaxyExchange(ExchangeBase):
             return TradeFee(percent=fee_overrides_config_map['beaxy_taker_fee'].value / Decimal('100'))
         """
 
-        is_maker = order_type is OrderType.LIMIT
+        is_maker = order_type is OrderType.LIMIT_MAKER
         return estimate_fee('beaxy', is_maker)
 
     async def execute_buy(
@@ -490,9 +491,8 @@ cdef class BeaxyExchange(ExchangeBase):
             raise
         except Exception:
             self.c_stop_tracking_order(order_id)
-            order_type_str = 'MARKET' if order_type == OrderType.MARKET else 'LIMIT'
             self.logger().network(
-                f'Error submitting buy {order_type_str} order to Beaxy for '
+                f'Error submitting buy {order_type} order to Beaxy for '
                 f'{decimal_amount} {trading_pair} {price}.',
                 exc_info=True,
                 app_warning_msg=f'Failed to submit buy order to Beaxy.'
@@ -556,9 +556,8 @@ cdef class BeaxyExchange(ExchangeBase):
             raise
         except Exception:
             self.c_stop_tracking_order(order_id)
-            order_type_str = 'MARKET' if order_type == OrderType.MARKET else 'LIMIT'
             self.logger().network(
-                f'Error submitting sell {order_type_str} order to Beaxy for '
+                f'Error submitting sell {order_type} order to Beaxy for '
                 f'{decimal_amount} {trading_pair} {price}.',
                 exc_info=True,
                 app_warning_msg='Failed to submit sell order to Beaxy. '
@@ -1035,7 +1034,7 @@ cdef class BeaxyExchange(ExchangeBase):
         return quantized_amount
 
     def supported_order_types(self):
-        return [OrderType.LIMIT, OrderType.LIMIT_MAKER]
+        return [OrderType.LIMIT, OrderType.LIMIT_MAKER, OrderType.MARKET]
 
     cdef c_stop_tracking_order(self, str order_id):
         """

@@ -186,11 +186,11 @@ class BeaxyExchangeUnitTest(unittest.TestCase):
         fee_overrides_config_map["beaxy_maker_fee"].value = None
         maker_fee: TradeFee = self.market.get_fee("BTC", "ETH", OrderType.LIMIT, TradeType.BUY, Decimal(1),
                                                   Decimal('0.1'))
-        self.assertAlmostEqual(Decimal("0.0015"), maker_fee.percent)
+        self.assertAlmostEqual(Decimal("0.002"), maker_fee.percent)
         fee_overrides_config_map["beaxy_maker_fee"].value = Decimal('0.75')
         maker_fee: TradeFee = self.market.get_fee("BTC", "ETH", OrderType.LIMIT, TradeType.BUY, Decimal(1),
                                                   Decimal('0.1'))
-        self.assertAlmostEqual(Decimal("0.0075"), maker_fee.percent)
+        self.assertAlmostEqual(Decimal("0.002"), maker_fee.percent)
 
     def place_order(self, is_buy, trading_pair, amount, order_type, price, ws_resps=[]):
         global EXCHANGE_ORDER_ID
@@ -219,7 +219,7 @@ class BeaxyExchangeUnitTest(unittest.TestCase):
         self.assertGreater(self.market.get_balance("BTC"), 0.00005)
         trading_pair = "DASH-BTC"
 
-        price: Decimal = self.market.get_price(trading_pair, True)
+        price: Decimal = self.market.get_price(trading_pair, True) * Decimal(1.1)
         quantized_amount: Decimal = self.market.quantize_order_amount(trading_pair, amount)
 
         order_id, _ = self.place_order(
@@ -254,7 +254,7 @@ class BeaxyExchangeUnitTest(unittest.TestCase):
         trading_pair = "DASH-BTC"
         self.assertGreater(self.market.get_balance("DASH"), 0.01)
 
-        price: Decimal = self.market.get_price(trading_pair, False)
+        price: Decimal = self.market.get_price(trading_pair, False) * Decimal(0.9)
         amount: Decimal = Decimal("0.01")
         quantized_amount: Decimal = self.market.quantize_order_amount(trading_pair, amount)
 
