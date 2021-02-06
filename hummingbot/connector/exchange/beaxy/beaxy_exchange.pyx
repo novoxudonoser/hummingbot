@@ -509,7 +509,7 @@ cdef class BeaxyExchange(ExchangeBase):
         """
         cdef:
             int64_t tracking_nonce = <int64_t> get_tracking_nonce()
-            str order_id = str(f'buy-{trading_pair}-{tracking_nonce}')
+            str order_id = str(f'HBOT-buy-{trading_pair}-{tracking_nonce}')
 
         safe_ensure_future(self.execute_buy(order_id, trading_pair, amount, order_type, price))
         return order_id
